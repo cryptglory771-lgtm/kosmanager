@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Fraunces, Plus_Jakarta_Sans } from 'next/font/google'
@@ -9,13 +9,34 @@ import { supabase } from '@/lib/supabase'
 const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-display', display: 'swap' })
 const plusJakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-body', display: 'swap' })
 
+const OTP_LENGTH = 6
+const RESEND_COOLDOWN = 60
+
 export default function LoginPage() {
   const router = useRouter()
   const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
+  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''))
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [countdown, setCountdown] = useState(0)
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [])
+
+  function startCountdown() {
+    setCountdown(RESEND_COOLDOWN)
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) { clearInterval(timerRef.current!); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+  }
 
   async function sendOtp() {
     setLoading(true)
@@ -26,11 +47,63 @@ export default function LoginPage() {
       body: JSON.stringify({ phone }),
     })
     const data = await res.json()
-    if (!res.ok) { setError(data.error) } else { setStep('otp') }
+    if (!res.ok) {
+      setError(data.error)
+    } else {
+      setDigits(Array(OTP_LENGTH).fill(''))
+      setStep('otp')
+      startCountdown()
+      setTimeout(() => inputRefs.current[0]?.focus(), 50)
+    }
     setLoading(false)
   }
 
+  async function resendOtp() {
+    setError('')
+    setDigits(Array(OTP_LENGTH).fill(''))
+    await sendOtp()
+  }
+
+  function handleDigitChange(index: number, value: string) {
+    const char = value.replace(/\D/g, '').slice(-1)
+    const next = [...digits]
+    next[index] = char
+    setDigits(next)
+    if (char && index < OTP_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  function handleDigitKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace') {
+      if (digits[index]) {
+        const next = [...digits]
+        next[index] = ''
+        setDigits(next)
+      } else if (index > 0) {
+        inputRefs.current[index - 1]?.focus()
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      inputRefs.current[index - 1]?.focus()
+    } else if (e.key === 'ArrowRight' && index < OTP_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus()
+    } else if (e.key === 'Enter' && digits.join('').length === OTP_LENGTH) {
+      verifyOtp()
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH)
+    const next = Array(OTP_LENGTH).fill('')
+    pasted.split('').forEach((c, i) => { next[i] = c })
+    setDigits(next)
+    const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1)
+    inputRefs.current[focusIdx]?.focus()
+  }
+
   async function verifyOtp() {
+    const otp = digits.join('')
     setLoading(true)
     setError('')
     const res = await fetch('/api/auth/verify-otp', {
@@ -130,35 +203,41 @@ export default function LoginPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* OTP boxes */}
+              {/* OTP 6-box */}
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#44403C', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#44403C', marginBottom: '12px' }}>
                   Kode OTP
                 </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="• • • • • •"
-                  maxLength={6}
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                  onKeyDown={e => e.key === 'Enter' && otp.length === 6 && verifyOtp()}
-                  autoFocus
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    padding: '18px 14px',
-                    fontSize: '28px', fontWeight: 800,
-                    letterSpacing: '0.5em', textAlign: 'center',
-                    border: '1.5px solid #D6D3D1', borderRadius: '12px',
-                    background: 'white', color: '#052E1A', outline: 'none',
-                    fontFamily: 'var(--font-display, serif)',
-                    transition: 'border-color 0.2s',
-                  }}
-                  onFocus={e => e.target.style.borderColor = '#0B4D35'}
-                  onBlur={e => e.target.style.borderColor = '#D6D3D1'}
-                />
-                <p style={{ fontSize: '12px', color: '#78716C', marginTop: '6px', textAlign: 'center' }}>
-                  Berlaku 5 menit · Cek folder spam jika tidak muncul
+                <div style={{ display: 'flex', gap: '10px' }} onPaste={handlePaste}>
+                  {digits.map((d, i) => (
+                    <input
+                      key={i}
+                      ref={el => { inputRefs.current[i] = el }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={d}
+                      autoFocus={i === 0}
+                      onChange={e => handleDigitChange(i, e.target.value)}
+                      onKeyDown={e => handleDigitKeyDown(i, e)}
+                      onFocus={e => e.target.select()}
+                      style={{
+                        flex: 1, minWidth: 0,
+                        height: '56px',
+                        fontSize: '24px', fontWeight: 800, textAlign: 'center',
+                        border: `2px solid ${d ? '#0B4D35' : '#D6D3D1'}`,
+                        borderRadius: '12px',
+                        background: d ? '#F0FBF5' : 'white',
+                        color: '#052E1A', outline: 'none',
+                        fontFamily: 'var(--font-display, serif)',
+                        transition: 'border-color 0.15s, background 0.15s',
+                        caretColor: 'transparent',
+                      }}
+                    />
+                  ))}
+                </div>
+                <p style={{ fontSize: '12px', color: '#78716C', marginTop: '8px', textAlign: 'center' }}>
+                  Berlaku 5 menit
                 </p>
               </div>
 
@@ -166,12 +245,13 @@ export default function LoginPage() {
 
               <button
                 onClick={verifyOtp}
-                disabled={loading || otp.length < 6}
+                disabled={loading || digits.join('').length < OTP_LENGTH}
                 style={{
                   width: '100%', padding: '15px',
-                  background: loading || otp.length < 6 ? '#A7EDD0' : '#0B4D35',
+                  background: loading || digits.join('').length < OTP_LENGTH ? '#A7EDD0' : '#0B4D35',
                   color: 'white', border: 'none', borderRadius: '12px',
-                  fontSize: '15px', fontWeight: 700, cursor: loading || otp.length < 6 ? 'not-allowed' : 'pointer',
+                  fontSize: '15px', fontWeight: 700,
+                  cursor: loading || digits.join('').length < OTP_LENGTH ? 'not-allowed' : 'pointer',
                   fontFamily: 'var(--font-body, sans-serif)',
                   transition: 'background 0.2s',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
@@ -180,8 +260,23 @@ export default function LoginPage() {
                 {loading ? <><Spinner /> Memverifikasi...</> : 'Masuk ke Dashboard'}
               </button>
 
+              {/* Resend */}
+              <div style={{ textAlign: 'center', fontSize: '13px', color: '#78716C' }}>
+                {countdown > 0 ? (
+                  <span>Kirim ulang kode dalam <strong style={{ color: '#0B4D35' }}>{countdown}s</strong></span>
+                ) : (
+                  <button
+                    onClick={resendOtp}
+                    disabled={loading}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#0B4D35', fontFamily: 'var(--font-body, sans-serif)', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '3px', padding: 0 }}
+                  >
+                    Kirim ulang kode OTP
+                  </button>
+                )}
+              </div>
+
               <button
-                onClick={() => { setStep('phone'); setOtp(''); setError('') }}
+                onClick={() => { setStep('phone'); setDigits(Array(OTP_LENGTH).fill('')); setError('') }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#78716C', fontFamily: 'var(--font-body, sans-serif)', textDecoration: 'underline', textUnderlineOffset: '3px' }}
               >
                 ← Ganti nomor HP
