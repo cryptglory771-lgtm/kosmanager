@@ -233,32 +233,27 @@ export default function InvoicesPage() {
 
         {/* Stat ringkasan */}
         {loading ? (
-          <div className="grid grid-cols-3 gap-3 mt-1">
+          <div className="grid grid-cols-3 gap-2 mt-1">
             {[0,1,2].map(i => (
-              <div key={i} className="h-16 rounded-2xl bg-white/10 animate-pulse" />
+              <div key={i} className="h-10 rounded-xl bg-white/10 animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3 mt-1">
+          <div className="grid grid-cols-3 gap-2 mt-1">
             {[
-              { label: 'Total Tagihan', value: invoices.length,        dot: 'bg-white/40',    sub: 'tagihan' },
-              { label: 'Sudah Lunas',   value: paidInvoices.length,    dot: 'bg-green-400',   sub: 'tagihan' },
-              { label: 'Belum Bayar',   value: unpaidInvoices.length,  dot: 'bg-red-400',     sub: 'tagihan' },
+              { label: 'Total',  value: invoices.length,        dot: 'bg-white/40'  },
+              { label: 'Lunas',  value: paidInvoices.length,    dot: 'bg-green-400' },
+              { label: 'Belum',  value: unpaidInvoices.length,  dot: 'bg-red-400'   },
             ].map(s => (
               <div
                 key={s.label}
-                className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-3 py-3"
+                className="bg-white/10 border border-white/15 rounded-xl px-2.5 py-2 flex items-center gap-2"
               >
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
-                  <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider leading-none">
-                    {s.label}
-                  </span>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
+                <div>
+                  <p className="font-display font-black text-white text-base leading-none">{s.value}</p>
+                  <p className="text-[10px] text-white/50 font-medium mt-0.5">{s.label}</p>
                 </div>
-                <p className="font-display font-black text-white text-2xl leading-none tracking-tight">
-                  {s.value}
-                </p>
-                <p className="text-[10px] text-white/40 font-medium mt-0.5">{s.sub}</p>
               </div>
             ))}
           </div>
