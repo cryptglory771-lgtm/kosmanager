@@ -232,16 +232,33 @@ export default function InvoicesPage() {
         </p>
 
         {/* Stat ringkasan */}
-        {!loading && (
-          <div className="flex items-center gap-4 mt-1">
+        {loading ? (
+          <div className="grid grid-cols-3 gap-3 mt-1">
+            {[0,1,2].map(i => (
+              <div key={i} className="h-16 rounded-2xl bg-white/10 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 mt-1">
             {[
-              { label: 'Total',  value: invoices.length },
-              { label: 'Lunas',  value: paidInvoices.length },
-              { label: 'Belum',  value: unpaidInvoices.length },
+              { label: 'Total Tagihan', value: invoices.length,        dot: 'bg-white/40',    sub: 'tagihan' },
+              { label: 'Sudah Lunas',   value: paidInvoices.length,    dot: 'bg-green-400',   sub: 'tagihan' },
+              { label: 'Belum Bayar',   value: unpaidInvoices.length,  dot: 'bg-red-400',     sub: 'tagihan' },
             ].map(s => (
-              <div key={s.label} className="flex items-center gap-1.5">
-                <span className="font-display font-black text-white text-lg leading-none">{s.value}</span>
-                <span className="text-green-300 text-xs font-medium">{s.label}</span>
+              <div
+                key={s.label}
+                className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-3 py-3"
+              >
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
+                  <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider leading-none">
+                    {s.label}
+                  </span>
+                </div>
+                <p className="font-display font-black text-white text-2xl leading-none tracking-tight">
+                  {s.value}
+                </p>
+                <p className="text-[10px] text-white/40 font-medium mt-0.5">{s.sub}</p>
               </div>
             ))}
           </div>
