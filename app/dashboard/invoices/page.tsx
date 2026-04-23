@@ -231,26 +231,18 @@ export default function InvoicesPage() {
           }
         </p>
 
-        {/* Pill counts */}
+        {/* Stat ringkasan */}
         {!loading && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-4 mt-1">
             {[
-              { label: `Semua (${invoices.length})`,      active: filter === 'semua',  onClick: () => setFilter('semua') },
-              { label: `Lunas (${paidInvoices.length})`,  active: filter === 'lunas',  onClick: () => setFilter('lunas') },
-              { label: `Belum (${unpaidInvoices.length})`,active: filter === 'belum',  onClick: () => setFilter('belum') },
-            ].map(p => (
-              <button
-                key={p.label}
-                onClick={p.onClick}
-                className={cn(
-                  'text-[11px] font-bold px-3 py-1 rounded-full transition-all active:scale-95',
-                  p.active
-                    ? 'bg-white text-green-800'
-                    : 'bg-white/15 text-white/80 hover:bg-white/25'
-                )}
-              >
-                {p.label}
-              </button>
+              { label: 'Total',  value: invoices.length },
+              { label: 'Lunas',  value: paidInvoices.length },
+              { label: 'Belum',  value: unpaidInvoices.length },
+            ].map(s => (
+              <div key={s.label} className="flex items-center gap-1.5">
+                <span className="font-display font-black text-white text-lg leading-none">{s.value}</span>
+                <span className="text-green-300 text-xs font-medium">{s.label}</span>
+              </div>
             ))}
           </div>
         )}
