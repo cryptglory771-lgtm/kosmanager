@@ -42,7 +42,7 @@ export default function LoginPage() {
       token_hash: data.token_hash,
       type: 'email',
     })
-    if (sessionError) { setError(sessionError.message) } else { router.push('/dashboard') }
+    if (sessionError) { setError(sessionError.message) } else { router.push('/onboarding') }
     setLoading(false)
   }
 
