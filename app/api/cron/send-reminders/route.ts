@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { sendWhatsApp } from '@/lib/whatsapp'
 import { InvoiceReminderEmail } from '@/emails/invoice-reminder'
 
