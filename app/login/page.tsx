@@ -16,18 +16,33 @@ export default function LoginPage() {
   async function sendOtp() {
     setLoading(true)
     setError('')
-    const formatted = phone.startsWith('0') ? '+62' + phone.slice(1) : phone
-    const { error } = await supabase.auth.signInWithOtp({ phone: formatted })
-    if (error) { setError(error.message) } else { setStep('otp') }
+    const res = await fetch('/api/auth/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error) } else { setStep('otp') }
     setLoading(false)
   }
 
   async function verifyOtp() {
     setLoading(true)
     setError('')
-    const formatted = phone.startsWith('0') ? '+62' + phone.slice(1) : phone
-    const { error } = await supabase.auth.verifyOtp({ phone: formatted, token: otp, type: 'sms' })
-    if (error) { setError(error.message) } else { router.push('/dashboard') }
+    const res = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, otp }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setLoading(false); return }
+
+    // Gunakan token dari server untuk establish session di browser
+    const { error: sessionError } = await supabase.auth.verifyOtp({
+      token_hash: data.token_hash,
+      type: 'email',
+    })
+    if (sessionError) { setError(sessionError.message) } else { router.push('/dashboard') }
     setLoading(false)
   }
 
@@ -48,17 +63,20 @@ export default function LoginPage() {
                 placeholder="08xxxxxxxxxx"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !loading && phone && sendOtp()}
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <Button onClick={sendOtp} disabled={loading || !phone} className="w-full">
-              {loading ? 'Mengirim...' : 'Kirim Kode OTP'}
+              {loading ? 'Mengirim...' : 'Kirim Kode OTP via WhatsApp'}
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Kode OTP dikirim ke <strong>{phone}</strong></p>
+            <p className="text-sm text-gray-600">
+              Kode OTP dikirim ke WhatsApp <strong>{phone}</strong>
+            </p>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Kode OTP</label>
               <input
@@ -66,15 +84,18 @@ export default function LoginPage() {
                 placeholder="123456"
                 maxLength={6}
                 value={otp}
-                onChange={e => setOtp(e.target.value)}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={e => e.key === 'Enter' && otp.length === 6 && verifyOtp()}
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-widest text-center text-lg"
+                autoFocus
               />
             </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <Button onClick={verifyOtp} disabled={loading || otp.length < 6} className="w-full">
               {loading ? 'Memverifikasi...' : 'Masuk'}
             </Button>
-            <button onClick={() => setStep('phone')} className="w-full text-sm text-gray-500 hover:text-gray-700">
+            <button onClick={() => { setStep('phone'); setOtp(''); setError('') }}
+              className="w-full text-sm text-gray-500 hover:text-gray-700">
               Ganti nomor
             </button>
           </div>
