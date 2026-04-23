@@ -1,0 +1,2 @@
+# kosmanager
+Kost Manager App
