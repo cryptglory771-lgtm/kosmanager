@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { sendWhatsApp } from '@/lib/whatsapp'
+import { sendWhatsApp, buildInvoiceMessage } from '@/lib/whatsapp'
 import { InvoiceReminderEmail } from '@/emails/invoice-reminder'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -19,6 +19,12 @@ export async function GET(req: NextRequest) {
   const in3days = new Date(today); in3days.setDate(today.getDate() + 3)
   const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
 
+  const dateMap: Record<string, 'h7' | 'h3' | 'overdue'> = {
+    [fmt(in7days)]: 'h7',
+    [fmt(in3days)]: 'h3',
+    [fmt(yesterday)]: 'overdue',
+  }
+
   const { data: invoices, error } = await supabaseAdmin
     .from('invoices')
     .select(`
@@ -32,9 +38,7 @@ export async function GET(req: NextRequest) {
     .in('due_date', [fmt(in7days), fmt(in3days), fmt(yesterday)])
     .eq('status', 'unpaid')
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const results = []
 
@@ -44,12 +48,16 @@ export async function GET(req: NextRequest) {
 
     const room = tenant.rooms
     const property = room?.properties
-    const dueLabel = invoice.due_date === fmt(yesterday) ? 'TERLAMBAT' : `jatuh tempo ${invoice.due_date}`
+    const msgType = dateMap[invoice.due_date] ?? 'manual'
 
-    const waMessage =
-      `Halo ${tenant.name}, tagihan sewa kamar ${room?.room_number} di ${property?.name} ` +
-      `sebesar Rp ${invoice.amount.toLocaleString('id-ID')} ${dueLabel}. ` +
-      `Segera lakukan pembayaran. Terima kasih!`
+    const waMessage = buildInvoiceMessage({
+      tenantName: tenant.name,
+      propertyName: property?.name ?? 'Kos',
+      roomNumber: room?.room_number ?? '-',
+      amount: invoice.amount,
+      dueDate: invoice.due_date,
+      type: msgType,
+    })
 
     const waResult = await sendWhatsApp(tenant.phone, waMessage)
 
@@ -75,7 +83,7 @@ export async function GET(req: NextRequest) {
       ...(tenant.email ? [{ invoice_id: invoice.id, channel: 'email', status: emailResult?.ok ? 'sent' : 'failed' }] : []),
     ])
 
-    results.push({ invoice_id: invoice.id, wa: waResult?.status, email: emailResult })
+    results.push({ invoice_id: invoice.id, type: msgType, wa: waResult?.status, email: emailResult })
   }
 
   return NextResponse.json({ sent: results.length, results })

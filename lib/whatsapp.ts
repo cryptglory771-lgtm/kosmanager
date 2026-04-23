@@ -9,3 +9,64 @@ export async function sendWhatsApp(phone: string, message: string) {
   })
   return res.json()
 }
+
+type InvoiceMessageParams = {
+  tenantName: string
+  propertyName: string
+  roomNumber: string
+  amount: number
+  dueDate: string
+  type: 'h7' | 'h3' | 'overdue' | 'manual'
+}
+
+export function buildInvoiceMessage(p: InvoiceMessageParams): string {
+  const rupiah = `Rp ${p.amount.toLocaleString('id-ID')}`
+  const header = `*${p.propertyName}*`
+
+  switch (p.type) {
+    case 'h7':
+      return (
+        `Halo *${p.tenantName}*! 👋\n\n` +
+        `Pengingat dari ${header} — tagihan sewa kamar *${p.roomNumber}* akan jatuh tempo dalam *7 hari* lagi.\n\n` +
+        `📋 *Detail Tagihan*\n` +
+        `• Kamar: ${p.roomNumber}\n` +
+        `• Jumlah: ${rupiah}\n` +
+        `• Jatuh tempo: ${p.dueDate}\n\n` +
+        `Mohon siapkan pembayaran sebelum tanggal jatuh tempo. Terima kasih! 🙏`
+      )
+
+    case 'h3':
+      return (
+        `Halo *${p.tenantName}*! ⚠️\n\n` +
+        `Tagihan sewa kamar *${p.roomNumber}* di ${header} akan jatuh tempo dalam *3 hari* lagi.\n\n` +
+        `📋 *Detail Tagihan*\n` +
+        `• Kamar: ${p.roomNumber}\n` +
+        `• Jumlah: ${rupiah}\n` +
+        `• Jatuh tempo: ${p.dueDate}\n\n` +
+        `Segera lakukan pembayaran untuk menghindari keterlambatan. Terima kasih!`
+      )
+
+    case 'overdue':
+      return (
+        `Halo *${p.tenantName}*,\n\n` +
+        `⚠️ Tagihan sewa kamar *${p.roomNumber}* di ${header} telah *melewati jatuh tempo*.\n\n` +
+        `📋 *Detail Tagihan*\n` +
+        `• Kamar: ${p.roomNumber}\n` +
+        `• Jumlah: ${rupiah}\n` +
+        `• Jatuh tempo: ${p.dueDate} _(terlambat)_\n\n` +
+        `Mohon segera selesaikan pembayaran atau hubungi kami untuk konfirmasi. Terima kasih atas perhatiannya.`
+      )
+
+    case 'manual':
+    default:
+      return (
+        `Halo *${p.tenantName}*! 👋\n\n` +
+        `Ini pengingat tagihan sewa dari ${header}:\n\n` +
+        `📋 *Detail Tagihan*\n` +
+        `• Kamar: ${p.roomNumber}\n` +
+        `• Jumlah: ${rupiah}\n` +
+        `• Jatuh tempo: ${p.dueDate}\n\n` +
+        `Mohon segera lakukan pembayaran. Terima kasih! 🙏`
+      )
+  }
+}
