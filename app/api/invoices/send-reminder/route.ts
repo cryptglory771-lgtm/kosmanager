@@ -1,46 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { sendWhatsApp, buildInvoiceMessage } from '@/lib/whatsapp'
+import { createPaymentTransaction } from '@/lib/midtrans'
 
 export async function POST(req: NextRequest) {
-  const { invoiceId } = await req.json()
-  if (!invoiceId) return NextResponse.json({ error: 'invoiceId wajib diisi' }, { status: 400 })
+  try {
+    const { invoiceId, templateType } = await req.json()
+    if (!invoiceId) return NextResponse.json({ ok: false, error: 'invoiceId wajib diisi' }, { status: 400 })
 
-  const { data: invoice, error } = await supabaseAdmin
-    .from('invoices')
-    .select(`
-      id, amount, due_date,
-      tenants ( name, phone,
-        rooms ( room_number,
-          properties ( name )
+    const { data: invoice, error } = await supabaseAdmin
+      .from('invoices')
+      .select(`
+        id, amount, due_date, status,
+        tenants ( name, phone,
+          rooms ( room_number,
+            properties ( name )
+          )
         )
-      )
-    `)
-    .eq('id', invoiceId)
-    .single()
+      `)
+      .eq('id', invoiceId)
+      .single()
 
-  if (error || !invoice) return NextResponse.json({ error: 'Invoice tidak ditemukan' }, { status: 404 })
+    if (error || !invoice) return NextResponse.json({ ok: false, error: 'Invoice tidak ditemukan' }, { status: 404 })
 
-  const tenant = invoice.tenants as any
-  const room = tenant?.rooms
-  const property = room?.properties
+    if (invoice.status === 'paid') return NextResponse.json({ ok: false, error: 'Invoice sudah lunas' }, { status: 400 })
 
-  const message = buildInvoiceMessage({
-    tenantName: tenant?.name ?? '',
-    propertyName: property?.name ?? 'Kos',
-    roomNumber: room?.room_number ?? '-',
-    amount: invoice.amount,
-    dueDate: invoice.due_date,
-    type: 'manual',
-  })
+    const tenant   = invoice.tenants as any
+    const room     = tenant?.rooms
+    const property = room?.properties
 
-  const result = await sendWhatsApp(tenant?.phone, message)
+    // Create Midtrans payment transaction
+    let paymentUrl: string | null = null
+    let paymentOrderId: string | null = null
 
-  await supabaseAdmin.from('notifications').insert({
-    invoice_id: invoice.id,
-    channel: 'whatsapp',
-    status: result?.status ? 'sent' : 'failed',
-  })
+    try {
+      const payment = await createPaymentTransaction({
+        invoiceId:    invoice.id,
+        amount:       invoice.amount,
+        tenantName:   tenant?.name      ?? 'Penyewa',
+        tenantPhone:  tenant?.phone     ?? null,
+        roomNumber:   room?.room_number ?? '-',
+        propertyName: property?.name    ?? 'Kos',
+      })
+      paymentUrl    = payment.paymentUrl
+      paymentOrderId = payment.orderId
 
-  return NextResponse.json({ ok: result?.status ?? false, message })
+      await supabaseAdmin
+        .from('invoices')
+        .update({ payment_url: paymentUrl, payment_order_id: paymentOrderId })
+        .eq('id', invoice.id)
+    } catch (payErr) {
+      console.error('[send-reminder] Midtrans error:', payErr)
+      // Continue without payment URL — don't block reminder
+    }
+
+    const message = buildInvoiceMessage({
+      tenantName:   tenant?.name      ?? '',
+      propertyName: property?.name    ?? 'Kos',
+      roomNumber:   room?.room_number ?? '-',
+      amount:       invoice.amount,
+      dueDate:      invoice.due_date,
+      type:         (templateType ?? 'manual') as 'h7' | 'h3' | 'overdue' | 'manual',
+      paymentUrl,
+    })
+
+    let waOk = false
+    try {
+      const result = await sendWhatsApp(tenant?.phone, message)
+      waOk = result?.status ?? false
+    } catch (waErr) {
+      console.error('[send-reminder] WhatsApp error:', waErr)
+    }
+
+    await supabaseAdmin.from('notifications').insert({
+      invoice_id: invoice.id,
+      channel:    'whatsapp',
+      status:     waOk ? 'sent' : 'failed',
+    })
+
+    return NextResponse.json({ ok: waOk, message, paymentUrl })
+  } catch (err) {
+    console.error('[send-reminder] unexpected error:', err)
+    return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 })
+  }
 }

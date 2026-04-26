@@ -2,14 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, BedDouble, FileText, User } from 'lucide-react'
+import { LayoutDashboard, BedDouble, FileText, User, Building2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const items = [
-  { href: '/dashboard',          label: 'Beranda', icon: LayoutDashboard },
-  { href: '/dashboard/rooms',    label: 'Kamar',   icon: BedDouble },
-  { href: '/dashboard/invoices', label: 'Tagihan', icon: FileText },
-  { href: '/dashboard/tenants',  label: 'Penyewa', icon: User },
+  { href: '/dashboard',            label: 'Beranda',  icon: LayoutDashboard },
+  { href: '/dashboard/rooms',      label: 'Kamar',    icon: BedDouble },
+  { href: '/dashboard/invoices',   label: 'Tagihan',  icon: FileText },
+  { href: '/dashboard/tenants',    label: 'Penyewa',  icon: User },
+  { href: '/dashboard/properties', label: 'Properti', icon: Building2 },
 ]
 
 export function BottomNav() {
@@ -32,12 +33,12 @@ export function BottomNav() {
               )}
             >
               <div className="relative">
-                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <Icon size={19} strokeWidth={active ? 2.5 : 1.8} />
                 {active && (
                   <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-green-800" />
                 )}
               </div>
-              <span className={cn('text-[10px] font-bold', active ? 'text-green-800' : 'text-gray-400')}>
+              <span className={cn('text-[9px] font-bold', active ? 'text-green-800' : 'text-gray-400')}>
                 {label}
               </span>
             </Link>

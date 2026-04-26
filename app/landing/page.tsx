@@ -98,8 +98,8 @@ export default function LandingPage() {
       />
 
       {/* NAV */}
-      <header>
-        <nav aria-label="Navigasi utama">
+      <header className="landing-header">
+        <nav className="landing-nav" aria-label="Navigasi utama">
           <Link href="/" className="logo" aria-label="KosManager — Halaman utama">
             <div className="logo-mark" aria-hidden="true">K</div>
             <div className="logo-text">Kos<span>Manager</span></div>

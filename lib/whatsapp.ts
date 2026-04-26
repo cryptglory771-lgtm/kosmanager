@@ -17,11 +17,18 @@ type InvoiceMessageParams = {
   amount: number
   dueDate: string
   type: 'h7' | 'h3' | 'overdue' | 'manual'
+  paymentUrl?: string | null
+}
+
+function paymentCta(url?: string | null): string {
+  if (!url) return ''
+  return `\n\n💳 *Bayar Sekarang:*\n${url}`
 }
 
 export function buildInvoiceMessage(p: InvoiceMessageParams): string {
   const rupiah = `Rp ${p.amount.toLocaleString('id-ID')}`
   const header = `*${p.propertyName}*`
+  const cta    = paymentCta(p.paymentUrl)
 
   switch (p.type) {
     case 'h7':
@@ -32,7 +39,8 @@ export function buildInvoiceMessage(p: InvoiceMessageParams): string {
         `• Kamar: ${p.roomNumber}\n` +
         `• Jumlah: ${rupiah}\n` +
         `• Jatuh tempo: ${p.dueDate}\n\n` +
-        `Mohon siapkan pembayaran sebelum tanggal jatuh tempo. Terima kasih! 🙏`
+        `Mohon siapkan pembayaran sebelum tanggal jatuh tempo. Terima kasih! 🙏` +
+        cta
       )
 
     case 'h3':
@@ -43,7 +51,8 @@ export function buildInvoiceMessage(p: InvoiceMessageParams): string {
         `• Kamar: ${p.roomNumber}\n` +
         `• Jumlah: ${rupiah}\n` +
         `• Jatuh tempo: ${p.dueDate}\n\n` +
-        `Segera lakukan pembayaran untuk menghindari keterlambatan. Terima kasih!`
+        `Segera lakukan pembayaran untuk menghindari keterlambatan. Terima kasih!` +
+        cta
       )
 
     case 'overdue':
@@ -54,7 +63,8 @@ export function buildInvoiceMessage(p: InvoiceMessageParams): string {
         `• Kamar: ${p.roomNumber}\n` +
         `• Jumlah: ${rupiah}\n` +
         `• Jatuh tempo: ${p.dueDate} _(terlambat)_\n\n` +
-        `Mohon segera selesaikan pembayaran atau hubungi kami untuk konfirmasi. Terima kasih atas perhatiannya.`
+        `Mohon segera selesaikan pembayaran atau hubungi kami untuk konfirmasi. Terima kasih atas perhatiannya.` +
+        cta
       )
 
     case 'manual':
@@ -66,7 +76,8 @@ export function buildInvoiceMessage(p: InvoiceMessageParams): string {
         `• Kamar: ${p.roomNumber}\n` +
         `• Jumlah: ${rupiah}\n` +
         `• Jatuh tempo: ${p.dueDate}\n\n` +
-        `Mohon segera lakukan pembayaran. Terima kasih! 🙏`
+        `Mohon segera lakukan pembayaran. Terima kasih! 🙏` +
+        cta
       )
   }
 }

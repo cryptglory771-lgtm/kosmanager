@@ -33,19 +33,22 @@ body {
   overflow-x: hidden;
 }
 
-nav {
+.landing-nav {
   position: fixed;
   top: 0; left: 0; right: 0;
-  z-index: 100;
+  z-index: 1000;
   padding: 0 5%;
   height: 68px;
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: space-between;
-  background: rgba(250,250,245,0.88);
+  background: rgba(250,250,245,0.92);
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(19,138,95,0.1);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(19,138,95,0.12);
 }
+
+.landing-header { height: 68px; position: relative; z-index: 1000; }
 
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .logo-mark {
@@ -183,8 +186,8 @@ nav {
 }
 .float-card-2 { animation-delay: -2.5s; }
 @keyframes floatCard { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-8px); } }
-.fc-left { left: -60px; bottom: 30%; width: 160px; }
-.fc-right { right: -50px; top: 30%; width: 155px; }
+.fc-left { left: 20px; bottom: 30%; width: 160px; }
+.fc-right { right: 50px; top: 30%; width: 155px; }
 .fc-label { font-size: 9px; font-weight: 700; color: #9CA3AF; margin-bottom: 4px; letter-spacing: 0.05em; }
 .fc-value { font-size: 20px; font-weight: 900; color: #0B4D35; letter-spacing: -0.5px; }
 .fc-sub { font-size: 9px; color: #6B7280; margin-top: 2px; display: flex; align-items: center; gap: 3px; }
