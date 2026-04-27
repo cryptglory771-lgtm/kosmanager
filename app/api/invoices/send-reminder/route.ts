@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { sendWhatsApp, buildInvoiceMessage } from '@/lib/whatsapp'
+import { sendWhatsApp, sendWhatsAppFile, buildInvoiceMessage } from '@/lib/whatsapp'
 import { createPaymentTransaction } from '@/lib/midtrans'
+import { generateInvoicePdf } from '@/lib/pdf-invoice'
+import { uploadInvoicePdf } from '@/lib/supabase-storage'
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,10 +13,10 @@ export async function POST(req: NextRequest) {
     const { data: invoice, error } = await supabaseAdmin
       .from('invoices')
       .select(`
-        id, amount, due_date, status,
+        id, amount, due_date, status, pdf_url,
         tenants ( name, phone,
           rooms ( room_number,
-            properties ( name )
+            properties ( name, address )
           )
         )
       `)
@@ -22,17 +24,15 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error || !invoice) return NextResponse.json({ ok: false, error: 'Invoice tidak ditemukan' }, { status: 404 })
-
     if (invoice.status === 'paid') return NextResponse.json({ ok: false, error: 'Invoice sudah lunas' }, { status: 400 })
 
     const tenant   = invoice.tenants as any
     const room     = tenant?.rooms
     const property = room?.properties
 
-    // Create Midtrans payment transaction
+    // ── Midtrans payment link ──────────────────────────────
     let paymentUrl: string | null = null
     let paymentOrderId: string | null = null
-
     try {
       const payment = await createPaymentTransaction({
         invoiceId:    invoice.id,
@@ -42,18 +42,37 @@ export async function POST(req: NextRequest) {
         roomNumber:   room?.room_number ?? '-',
         propertyName: property?.name    ?? 'Kos',
       })
-      paymentUrl    = payment.paymentUrl
+      paymentUrl     = payment.paymentUrl
       paymentOrderId = payment.orderId
-
       await supabaseAdmin
         .from('invoices')
         .update({ payment_url: paymentUrl, payment_order_id: paymentOrderId })
         .eq('id', invoice.id)
     } catch (payErr) {
       console.error('[send-reminder] Midtrans error:', payErr)
-      // Continue without payment URL — don't block reminder
     }
 
+    // ── Generate invoice PDF ───────────────────────────────
+    let pdfUrl: string | null = (invoice as any).pdf_url ?? null
+    try {
+      const pdfBuffer = await generateInvoicePdf({
+        invoiceId:       invoice.id,
+        amount:          invoice.amount,
+        dueDate:         invoice.due_date,
+        isPaid:          false,
+        tenantName:      tenant?.name           ?? '',
+        tenantPhone:     tenant?.phone          ?? null,
+        roomNumber:      room?.room_number      ?? '-',
+        propertyName:    property?.name         ?? 'Kos',
+        propertyAddress: property?.address      ?? null,
+      })
+      pdfUrl = await uploadInvoicePdf(pdfBuffer, invoice.id, 'invoice')
+      await supabaseAdmin.from('invoices').update({ pdf_url: pdfUrl }).eq('id', invoice.id)
+    } catch (pdfErr) {
+      console.error('[send-reminder] PDF error:', pdfErr)
+    }
+
+    // ── Build WA message ──────────────────────────────────
     const message = buildInvoiceMessage({
       tenantName:   tenant?.name      ?? '',
       propertyName: property?.name    ?? 'Kos',
@@ -64,10 +83,21 @@ export async function POST(req: NextRequest) {
       paymentUrl,
     })
 
+    // ── Send WhatsApp (with PDF if available) ─────────────
     let waOk = false
     try {
-      const result = await sendWhatsApp(tenant?.phone, message)
-      waOk = result?.status ?? false
+      if (pdfUrl && tenant?.phone) {
+        const result = await sendWhatsAppFile(
+          tenant.phone,
+          pdfUrl,
+          `invoice-kamar-${room?.room_number ?? ''}.pdf`,
+          message,
+        )
+        waOk = result?.status ?? false
+      } else if (tenant?.phone) {
+        const result = await sendWhatsApp(tenant.phone, message)
+        waOk = result?.status ?? false
+      }
     } catch (waErr) {
       console.error('[send-reminder] WhatsApp error:', waErr)
     }
@@ -78,7 +108,7 @@ export async function POST(req: NextRequest) {
       status:     waOk ? 'sent' : 'failed',
     })
 
-    return NextResponse.json({ ok: waOk, message, paymentUrl })
+    return NextResponse.json({ ok: waOk, message, paymentUrl, pdfUrl })
   } catch (err) {
     console.error('[send-reminder] unexpected error:', err)
     return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 })

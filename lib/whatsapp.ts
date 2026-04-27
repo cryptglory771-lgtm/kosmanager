@@ -1,3 +1,20 @@
+export async function sendWhatsAppFile(
+  phone: string,
+  fileUrl: string,
+  filename: string,
+  caption?: string,
+) {
+  const res = await fetch('https://api.fonnte.com/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': process.env.FONNTE_TOKEN!,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ target: phone, file: fileUrl, filename, message: caption ?? '' }),
+  })
+  return res.json()
+}
+
 export async function sendWhatsApp(phone: string, message: string) {
   const res = await fetch('https://api.fonnte.com/send', {
     method: 'POST',
