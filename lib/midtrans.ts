@@ -25,31 +25,43 @@ export async function createPaymentTransaction(params: {
   propertyName: string
 }): Promise<CreateTransactionResult> {
   const { invoiceId, amount, tenantName, tenantPhone, tenantEmail, roomNumber, propertyName } = params
-  const orderId = `INV-${invoiceId}-${Date.now()}`
+
+  // max 36 chars — Midtrans limits order_id to 50 chars; UUID alone is 36
+  const orderId = `KM-${invoiceId.replace(/-/g, '').slice(0, 20)}`
+
+  // Supabase numeric cols return as string — Midtrans requires integer
+  const grossAmount = Math.round(Number(amount))
+
+  // item name max 50 chars
+  const itemName = `Sewa Kamar ${roomNumber} - ${propertyName}`.slice(0, 50)
+
   const nameParts = tenantName.trim().split(/\s+/)
+  const siteUrl   = process.env.NEXT_PUBLIC_SITE_URL ?? ''
 
   const parameter = {
     transaction_details: {
-      order_id: orderId,
-      gross_amount: amount,
+      order_id:     orderId,
+      gross_amount: grossAmount,
     },
     customer_details: {
       first_name: nameParts[0],
-      last_name: nameParts.slice(1).join(' ') || undefined,
+      last_name:  nameParts.slice(1).join(' ') || undefined,
       ...(tenantPhone ? { phone: tenantPhone } : {}),
       ...(tenantEmail ? { email: tenantEmail } : {}),
     },
     item_details: [
       {
-        id: invoiceId,
-        price: amount,
+        id:       invoiceId,
+        price:    grossAmount,
         quantity: 1,
-        name: `Sewa Kamar ${roomNumber} - ${propertyName}`,
+        name:     itemName,
       },
     ],
-    callbacks: {
-      finish: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/invoices`,
-    },
+    ...(siteUrl ? {
+      callbacks: {
+        finish: `${siteUrl}/dashboard/invoices/${invoiceId}/paid?method=online`,
+      },
+    } : {}),
   }
 
   const snap = getSnap()

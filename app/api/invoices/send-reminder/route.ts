@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     // ── Midtrans payment link ──────────────────────────────
     let paymentUrl: string | null = null
     let paymentOrderId: string | null = null
+    let midtransError: string | null = null
     try {
       const payment = await createPaymentTransaction({
         invoiceId:    invoice.id,
@@ -48,7 +49,8 @@ export async function POST(req: NextRequest) {
         .from('invoices')
         .update({ payment_url: paymentUrl, payment_order_id: paymentOrderId })
         .eq('id', invoice.id)
-    } catch (payErr) {
+    } catch (payErr: any) {
+      midtransError = payErr?.message ?? String(payErr)
       console.error('[send-reminder] Midtrans error:', payErr)
     }
 
@@ -108,7 +110,7 @@ export async function POST(req: NextRequest) {
       status:     waOk ? 'sent' : 'failed',
     })
 
-    return NextResponse.json({ ok: waOk, message, paymentUrl, pdfUrl })
+    return NextResponse.json({ ok: waOk, message, paymentUrl, pdfUrl, midtransError })
   } catch (err) {
     console.error('[send-reminder] unexpected error:', err)
     return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 })
