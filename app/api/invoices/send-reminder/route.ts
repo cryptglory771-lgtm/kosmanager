@@ -54,8 +54,9 @@ export async function POST(req: NextRequest) {
       console.error('[send-reminder] Midtrans error:', payErr)
     }
 
-    // ── Generate invoice PDF ───────────────────────────────
+    // ── Generate & upload invoice PDF ────────────────────
     let pdfUrl: string | null = (invoice as any).pdf_url ?? null
+    let pdfError: string | null = null
     try {
       const pdfBuffer = await generateInvoicePdf({
         invoiceId:       invoice.id,
@@ -70,11 +71,12 @@ export async function POST(req: NextRequest) {
       })
       pdfUrl = await uploadInvoicePdf(pdfBuffer, invoice.id, 'invoice')
       await supabaseAdmin.from('invoices').update({ pdf_url: pdfUrl }).eq('id', invoice.id)
-    } catch (pdfErr) {
-      console.error('[send-reminder] PDF error:', pdfErr)
+    } catch (err: any) {
+      pdfError = err?.message ?? String(err)
+      console.error('[send-reminder] PDF error:', err)
     }
 
-    // ── Build WA message ──────────────────────────────────
+    // ── Build WA message (always include PDF link if available) ──
     const message = buildInvoiceMessage({
       tenantName:   tenant?.name      ?? '',
       propertyName: property?.name    ?? 'Kos',
@@ -83,9 +85,11 @@ export async function POST(req: NextRequest) {
       dueDate:      invoice.due_date,
       type:         (templateType ?? 'manual') as 'h7' | 'h3' | 'overdue' | 'manual',
       paymentUrl,
+      pdfUrl,
     })
 
-    // ── Send WhatsApp (with PDF if available) ─────────────
+    // ── Send WhatsApp ─────────────────────────────────────
+    // Try as file attachment first; fall back to text message (PDF link is in message body)
     let waOk = false
     try {
       if (pdfUrl && tenant?.phone) {
@@ -95,7 +99,12 @@ export async function POST(req: NextRequest) {
           `invoice-kamar-${room?.room_number ?? ''}.pdf`,
           message,
         )
+        // If file send fails (Fonnte plan limitation), fall back to text
         waOk = result?.status ?? false
+        if (!waOk) {
+          const fallback = await sendWhatsApp(tenant.phone, message)
+          waOk = fallback?.status ?? false
+        }
       } else if (tenant?.phone) {
         const result = await sendWhatsApp(tenant.phone, message)
         waOk = result?.status ?? false
@@ -110,7 +119,7 @@ export async function POST(req: NextRequest) {
       status:     waOk ? 'sent' : 'failed',
     })
 
-    return NextResponse.json({ ok: waOk, message, paymentUrl, pdfUrl, midtransError })
+    return NextResponse.json({ ok: waOk, message, paymentUrl, pdfUrl, midtransError, pdfError })
   } catch (err) {
     console.error('[send-reminder] unexpected error:', err)
     return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 })

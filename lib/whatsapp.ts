@@ -35,6 +35,7 @@ type InvoiceMessageParams = {
   dueDate: string
   type: 'h7' | 'h3' | 'overdue' | 'manual'
   paymentUrl?: string | null
+  pdfUrl?: string | null
 }
 
 function paymentCta(url?: string | null): string {
@@ -42,10 +43,15 @@ function paymentCta(url?: string | null): string {
   return `\n\n💳 *Bayar Sekarang:*\n${url}`
 }
 
+function pdfCta(url?: string | null): string {
+  if (!url) return ''
+  return `\n\n📄 *Invoice PDF:*\n${url}`
+}
+
 export function buildInvoiceMessage(p: InvoiceMessageParams): string {
   const rupiah = `Rp ${p.amount.toLocaleString('id-ID')}`
   const header = `*${p.propertyName}*`
-  const cta    = paymentCta(p.paymentUrl)
+  const cta    = paymentCta(p.paymentUrl) + pdfCta(p.pdfUrl)
 
   switch (p.type) {
     case 'h7':
